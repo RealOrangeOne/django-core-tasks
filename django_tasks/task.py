@@ -56,6 +56,8 @@ class Task(Generic[P, T]):
     run_after: Optional[datetime] = None
     """The earliest this task will run"""
 
+    enqueue_on_commit: Optional[bool] = None
+
     def __post_init__(self) -> None:
         self.get_backend().validate_task(self)
 
@@ -164,6 +166,7 @@ def task(
     priority: int = 0,
     queue_name: str = DEFAULT_QUEUE_NAME,
     backend: str = DEFAULT_TASK_BACKEND_ALIAS,
+    enqueue_on_commit: Optional[bool] = None,
 ) -> Callable[[Callable[P, T]], Task[P, T]]: ...
 
 
@@ -174,6 +177,7 @@ def task(
     priority: int = 0,
     queue_name: str = DEFAULT_QUEUE_NAME,
     backend: str = DEFAULT_TASK_BACKEND_ALIAS,
+    enqueue_on_commit: Optional[bool] = None,
 ) -> Union[Task[P, T], Callable[[Callable[P, T]], Task[P, T]]]:
     """
     A decorator used to create a task.
@@ -182,7 +186,11 @@ def task(
 
     def wrapper(f: Callable[P, T]) -> Task[P, T]:
         return tasks[backend].task_class(
-            priority=priority, func=f, queue_name=queue_name, backend=backend
+            priority=priority,
+            func=f,
+            queue_name=queue_name,
+            backend=backend,
+            enqueue_on_commit=enqueue_on_commit,
         )
 
     if function:

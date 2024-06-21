@@ -83,6 +83,23 @@ The returned `TaskResult` can be interrogated to query the current state of the 
 
 If the task takes arguments, these can be passed as-is to `enqueue`.
 
+#### Transactions
+
+By default, it's up to the backend to determine whether the task should be enqueued immediately (after calling `.enqueue`) or wait until the end of the current database transaction (if there is one).
+
+This can be configured using the `ENQUEUE_ON_COMMIT` setting. `True` and `False` force the behaviour, and `None` is used to let the backend decide.
+
+```python
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
+        "ENQUEUE_ON_COMMIT": False
+    }
+}
+```
+
+All built-in backends default to waiting for the end of the transaction (`"ENQUEUE_ON_COMMIT": True`).
+
 ### Executing tasks with the database backend
 
 First, you'll need to add `django_tasks.backends.database`  to `INSTALLED_APPS`, and run `manage.py migrate`.

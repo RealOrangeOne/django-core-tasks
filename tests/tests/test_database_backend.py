@@ -7,7 +7,7 @@ from io import StringIO
 
 from django.core.exceptions import SuspiciousOperation
 from django.core.management import call_command, execute_from_command_line
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -17,14 +17,14 @@ from django_tasks.backends.database.management.commands.db_worker import (
     logger as db_worker_logger,
 )
 from django_tasks.backends.database.models import DBTaskResult
-from django_tasks.exceptions import ResultDoesNotExist
+from django_tasks.exceptions import InvalidTaskError, ResultDoesNotExist
 from tests import tasks as test_tasks
 
 
 @override_settings(
     TASKS={"default": {"BACKEND": "django_tasks.backends.database.DatabaseBackend"}}
 )
-class DatabaseBackendTestCase(TestCase):
+class DatabaseBackendTestCase(TransactionTestCase):
     def test_using_correct_backend(self) -> None:
         self.assertEqual(default_task_backend, tasks["default"])
         self.assertIsInstance(tasks["default"], DatabaseBackend)
@@ -170,22 +170,65 @@ class DatabaseBackendTestCase(TestCase):
             backend_name="default",
         )
 
-        with self.assertRaises(
-            ImportError,
-        ):
+        with self.assertRaises(ImportError):
             _ = db_task_result.task
 
     def test_check(self) -> None:
-        errors = default_task_backend.check()
+        errors = list(default_task_backend.check())
 
         self.assertEqual(len(errors), 0)
 
     @override_settings(INSTALLED_APPS=[])
     def test_database_backend_app_missing(self) -> None:
-        errors = default_task_backend.check()
+        errors = list(default_task_backend.check())
 
         self.assertEqual(len(errors), 1)
         self.assertIn("django_tasks.backends.database", errors[0].hint)
+
+    def test_must_enqueue_on_commit_in_options(self) -> None:
+        with override_settings(
+            TASKS={
+                "default": {
+                    "BACKEND": "django_tasks.backends.database.DatabaseBackend",
+                    "ENQUEUE_ON_COMMIT": True,
+                }
+            }
+        ):
+            self.assertEqual(len(list(default_task_backend.check())), 0)
+
+        with override_settings(
+            TASKS={
+                "default": {
+                    "BACKEND": "django_tasks.backends.database.DatabaseBackend",
+                    "ENQUEUE_ON_COMMIT": None,
+                }
+            }
+        ):
+            self.assertEqual(len(list(default_task_backend.check())), 0)
+
+        with override_settings(
+            TASKS={
+                "default": {
+                    "BACKEND": "django_tasks.backends.database.DatabaseBackend",
+                    "ENQUEUE_ON_COMMIT": False,
+                }
+            }
+        ):
+            errors = list(default_task_backend.check())
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(errors[0].hint, "Ensure ENQUEUE_ON_COMMIT is True or None")
+
+    def test_must_enqueue_on_commit_in_task(self) -> None:
+        self.assertIsNone(default_task_backend.enqueue_on_commit)
+
+        default_task_backend.validate_task(test_tasks.noop_task)
+        default_task_backend.validate_task(test_tasks.enqueue_on_commit_task)
+
+        with self.assertRaisesMessage(
+            InvalidTaskError,
+            "enqueue_on_commit must be True or None when using database backend",
+        ):
+            default_task_backend.validate_task(test_tasks.never_enqueue_on_commit_task)
 
 
 @override_settings(
