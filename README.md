@@ -102,6 +102,10 @@ Finally, you can run `manage.py db_worker` to run tasks as they're created. Chec
 > [!CAUTION]
 > The database backend does not work with SQLite when you are running multiple worker processes - tasks may be executed more than once. See [#33](https://github.com/RealOrangeOne/django-tasks/issues/33).
 
+### Culling old tasks
+
+After a while, tasks may start to build up in your database. This can be managed using the `cull_db_tasks` management command, which deletes completed and failed tasks according to the given retention policy. Check the `--help` for the available options.
+
 ### Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for information on how to contribute.
